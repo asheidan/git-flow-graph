@@ -55,3 +55,6 @@ dkms.conf
 .sconsign.dblite
 .sconf_temp/
 /config.log
+
+# Editor backups
+*~
