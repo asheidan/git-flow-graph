@@ -58,3 +58,6 @@ dkms.conf
 
 # Editor backups
 *~
+
+# Specific project artefacts
+/git-flow-graph
