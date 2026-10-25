@@ -1,0 +1,11 @@
+[package]
+name = "git-flow-graph"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4.45"
+clap = { version = "3.1.6", features = ["derive", "env"] }
+git2 = "0.19.0"
