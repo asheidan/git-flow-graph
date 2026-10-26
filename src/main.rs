@@ -8,6 +8,7 @@ enum Colorize<T: Display> {
     Cyan(T),
     Green(T),
     Purple(T),
+    Magenta(T),
 }
 
 impl<T: Display> Display for Colorize<T> {
@@ -16,10 +17,15 @@ impl<T: Display> Display for Colorize<T> {
             Colorize::Cyan(content) => ("\x1b[36m", content),
             Colorize::Purple(content) => ("\x1b[35m", content),
             Colorize::Green(content) => ("\x1b[32m", content),
+            Colorize::Magenta(content) => ("\x1b[35;1m", content),
         };
 
-        // TODO: Handle format strings
-        write!(f, "{}{}\x1b[0m", start_code, content)
+        // From https://doc.rust-lang.org/nightly/std/fmt/struct.Formatter.html#method.precision
+        if let Some(precision) = f.precision() {
+            write!(f, "{}{:.*}\x1b[0m", start_code, precision, content)
+        } else {
+            write!(f, "{}{}\x1b[0m", start_code, content)
+        }
     }
 }
 
@@ -49,7 +55,9 @@ fn list_branches(repo: &Repository) -> Vec<(Oid, String)> {
         Err(e) => panic!("Failed to list branches: {}", e),
         Ok(branches) => branches,
     };
-    let branch_map: Vec<(Oid, String)> = branches
+
+    // Mutable to be able to sort it after collection
+    let mut branch_map: Vec<(Oid, String)> = branches
         .map(|info| match info {
             Err(e) => panic!("Failed to get branch: {}", e),
             Ok((branch, _)) => branch,
@@ -68,12 +76,13 @@ fn list_branches(repo: &Repository) -> Vec<(Oid, String)> {
             (sha, branch_name.to_string())
         })
         .collect();
+    branch_map.sort();
 
     branch_map
 }
 
 fn print_padding(open_branch_count: usize) {
-    repeat_n("| ", open_branch_count).for_each(|s| print!("{}", s));
+    repeat_n("│ ", open_branch_count).for_each(|s| print!("{}", s));
 }
 
 fn main() {
@@ -147,8 +156,8 @@ fn main() {
             print_padding(open_branches.len());
             print!(
                 // Oid can be shortened by using {:.length}
-                "○  \x1b[35m{:.8}\x1b[0m {} {}",
-                oid,
+                "○  {:.8} {} {}",
+                Colorize::Purple(oid),
                 author_name,
                 Colorize::Cyan(commit_datetime)
             );
@@ -159,7 +168,7 @@ fn main() {
                 .map(|(_sha, branch_name)| branch_name)
                 .fold(String::new(), |a, b| a + b + " ");
             if branch_decoration.len() != 0 {
-                println!(" \x1b[32m{}\x1b[0m", branch_decoration);
+                println!(" {}", Colorize::Green(branch_decoration));
             } else {
                 println!();
             }
