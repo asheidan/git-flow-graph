@@ -1,12 +1,31 @@
-use std::iter::repeat_n;
+use std::{fmt::Display, iter::repeat_n};
 
 use chrono::{DateTime, FixedOffset};
 use clap::Parser;
 use git2::{Oid, Repository, Sort};
 
+enum Colorize<T: Display> {
+    Cyan(T),
+    Green(T),
+    Purple(T),
+}
+
+impl<T: Display> Display for Colorize<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (start_code, content) = match self {
+            Colorize::Cyan(content) => ("\x1b[36m", content),
+            Colorize::Purple(content) => ("\x1b[35m", content),
+            Colorize::Green(content) => ("\x1b[32m", content),
+        };
+
+        // TODO: Handle format strings
+        write!(f, "{}{}\x1b[0m", start_code, content)
+    }
+}
+
 #[derive(Parser, Debug)]
 struct Args {
-    /// Set the parth to the repository (".git" directory). This can also be controlled by setting
+    /// Set the path to the repository (".git" directory). This can also be controlled by setting
     /// the GIT_DIR environment variable. It can be an abslute path or relative path to the current
     /// working directory.
     #[clap(long, env="GIT_DIR", default_value_t=String::from("."), value_name="PATH")]
@@ -128,8 +147,10 @@ fn main() {
             print_padding(open_branches.len());
             print!(
                 // Oid can be shortened by using {:.length}
-                "○  \x1b[35m{:.8}\x1b[0m {} \x1b[36m{}\x1b[0m",
-                oid, author_name, commit_datetime
+                "○  \x1b[35m{:.8}\x1b[0m {} {}",
+                oid,
+                author_name,
+                Colorize::Cyan(commit_datetime)
             );
 
             let branch_decoration = branch_heads
@@ -144,6 +165,15 @@ fn main() {
             }
 
             print_padding(open_branches.len());
-            println!("|  {:.summary_length$}", commit.summary().unwrap());
+
+            let commit_stem = match next_commit {
+                None => "",
+                Some(_) => "│",
+            };
+            println!(
+                "{:1}  {:.summary_length$}",
+                commit_stem,
+                commit.summary().unwrap()
+            );
         });
 }
