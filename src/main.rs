@@ -2,9 +2,8 @@ use std::{collections::HashMap, iter::repeat_n};
 
 use chrono::{DateTime, FixedOffset};
 use clap::Parser;
-use git2::{Oid, Repository, Sort, Branch};
+use git2::{Branch, Oid, Repository, Sort};
 use git_flow_graph::colorize::Colorize;
-use itertools::Itertools;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -24,15 +23,6 @@ struct Args {
     summary_length: usize,
 }
 
-fn foo<'a>(repo: &'a Repository) -> HashMap<Oid, Vec<&'a Branch> {
-    let branches = repo.branches().unwrap();
-
-    let mut branch_map = HashMap::new();
-    branches.
-
-    branch_map
-}
-
 fn list_branches(repo: &Repository) -> HashMap<Oid, Vec<String>> {
     let branches = match repo.branches(None) {
         Err(e) => panic!("Failed to list branches: {}", e),
@@ -40,41 +30,34 @@ fn list_branches(repo: &Repository) -> HashMap<Oid, Vec<String>> {
     };
 
     // Mutable to be able to sort it after collection
-    let mut branch_map: Vec<(Oid, String)> = branches
+    let mut branch_map: Vec<(Oid, Branch)> = branches
         .map(|info| match info {
             Err(e) => panic!("Failed to get branch: {}", e),
             Ok((branch, _)) => branch,
         })
         .map(|branch| {
-            let branch_name = match branch.name() {
-                Err(e) => panic!("Failed to get branch name: {}", e),
-                Ok(name) => name.unwrap(),
-            };
             let sha = match branch.get().peel_to_commit() {
                 Err(e) => panic!("Failed to peel reference to commit: {}", e),
                 Ok(commit) => commit.id(),
             };
 
             // branch_name is a borrow based on branch. Need value to outlive scope.
-            (sha, branch_name.to_string())
+            (sha, branch)
         })
         .collect();
-    branch_map.sort();
+    branch_map.sort_by_key(|(sha, _)| *sha);
 
     branch_map
-        .into_iter()
-        .map(|(sha, branch_name)| (sha, vec![branch_name]))
-        .coalesce(|a, b| {
-            if a.0 == b.0 {
-                let mut combined = Vec::new();
-                combined.extend(a.1);
-                combined.extend(b.1);
-                combined.sort();
-
-                Ok((a.0, combined))
-            } else {
-                Err((a, b))
-            }
+        .chunk_by(|a, b| a.0 == b.0)
+        .map(|group| match *group {
+            [(sha, _), ..] => (
+                sha,
+                group
+                    .iter()
+                    .map(|(_, branch)| branch.name().unwrap().unwrap().to_string())
+                    .collect::<Vec<String>>(),
+            ),
+            [] => panic!("We got an empty slice, we don't want an empty slice"),
         })
         .collect()
 }
@@ -96,7 +79,7 @@ fn main() {
 
     let repo = Repository::open(args.git_dir).unwrap();
 
-    let _branch_heads = list_branches(&repo);
+    let branch_heads = list_branches(&repo);
     //branch_heads.append((repo.head().unwrap().peel_to_commit().unwrap(), String::from("HEAD")));
 
     let mut revwalk = repo.revwalk().unwrap();
@@ -153,21 +136,20 @@ fn main() {
 
             print_padding(open_branches.len());
             print!(
-                // Oid can be shortened by using {:.length}
+                // Oid can be shortened by using precision {:.length}
                 "○  {:.8} {} {}",
                 Colorize::Purple(oid),
                 author_name,
-                Colorize::Cyan(commit_datetime)
+                Colorize::Cyan(commit_datetime.naive_local()) // TODO: Control date output with options
             );
 
-            // let branch_decoration = branch_heads
-            //     .iter()
-            //     .filter(|(sha, _branch_names)| sha == &oid)
-            //     .map(|(_sha, branch_names)| branch_names)
-            //     .fold(String::new(), |a, b| a + b + " ");
-            // if branch_decoration.len() != 0 {
-            //     print!(" {}", Colorize::Green(branch_decoration));
-            // }
+            if let Some(branches) = branch_heads.get(&oid) {
+                let branch_decoration = branches.iter().fold(String::new(), |a, b| a + b + " ");
+
+                if branch_decoration.len() != 0 {
+                    print!(" {}", Colorize::Green(branch_decoration));
+                }
+            }
 
             // ---- End of first line ---------------------------------
             println!();
@@ -175,7 +157,7 @@ fn main() {
             print_padding(open_branches.len());
 
             let commit_stem = match next_commit {
-                None => "",
+                None => " ",
                 Some(_) => "│",
             };
             println!(
