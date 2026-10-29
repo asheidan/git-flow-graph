@@ -1,9 +1,10 @@
-use std::iter::repeat_n;
+use std::{collections::HashMap, iter::repeat_n};
 
 use chrono::{DateTime, FixedOffset};
 use clap::Parser;
-use git2::{Oid, Repository, Sort};
+use git2::{Oid, Repository, Sort, Branch};
 use git_flow_graph::colorize::Colorize;
+use itertools::Itertools;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -23,10 +24,16 @@ struct Args {
     summary_length: usize,
 }
 
-fn list_branches(repo: &Repository) -> Vec<(Oid, String)> {
-    // Mainly for controlling the lifetime of known_branches
-    //let mut known_branches: HashMap<Oid, Branch> = HashMap::new();
+fn foo<'a>(repo: &'a Repository) -> HashMap<Oid, Vec<&'a Branch> {
+    let branches = repo.branches().unwrap();
 
+    let mut branch_map = HashMap::new();
+    branches.
+
+    branch_map
+}
+
+fn list_branches(repo: &Repository) -> HashMap<Oid, Vec<String>> {
     let branches = match repo.branches(None) {
         Err(e) => panic!("Failed to list branches: {}", e),
         Ok(branches) => branches,
@@ -55,6 +62,21 @@ fn list_branches(repo: &Repository) -> Vec<(Oid, String)> {
     branch_map.sort();
 
     branch_map
+        .into_iter()
+        .map(|(sha, branch_name)| (sha, vec![branch_name]))
+        .coalesce(|a, b| {
+            if a.0 == b.0 {
+                let mut combined = Vec::new();
+                combined.extend(a.1);
+                combined.extend(b.1);
+                combined.sort();
+
+                Ok((a.0, combined))
+            } else {
+                Err((a, b))
+            }
+        })
+        .collect()
 }
 
 fn print_padding(open_branch_count: usize) {
@@ -74,7 +96,7 @@ fn main() {
 
     let repo = Repository::open(args.git_dir).unwrap();
 
-    let branch_heads = list_branches(&repo);
+    let _branch_heads = list_branches(&repo);
     //branch_heads.append((repo.head().unwrap().peel_to_commit().unwrap(), String::from("HEAD")));
 
     let mut revwalk = repo.revwalk().unwrap();
@@ -138,16 +160,17 @@ fn main() {
                 Colorize::Cyan(commit_datetime)
             );
 
-            let branch_decoration = branch_heads
-                .iter()
-                .filter(|(sha, _branch_name)| sha == &oid)
-                .map(|(_sha, branch_name)| branch_name)
-                .fold(String::new(), |a, b| a + b + " ");
-            if branch_decoration.len() != 0 {
-                println!(" {}", Colorize::Green(branch_decoration));
-            } else {
-                println!();
-            }
+            // let branch_decoration = branch_heads
+            //     .iter()
+            //     .filter(|(sha, _branch_names)| sha == &oid)
+            //     .map(|(_sha, branch_names)| branch_names)
+            //     .fold(String::new(), |a, b| a + b + " ");
+            // if branch_decoration.len() != 0 {
+            //     print!(" {}", Colorize::Green(branch_decoration));
+            // }
+
+            // ---- End of first line ---------------------------------
+            println!();
 
             print_padding(open_branches.len());
 

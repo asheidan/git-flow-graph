@@ -9,3 +9,4 @@ edition = "2021"
 chrono = "0.4.45"
 clap = { version = "3.1.6", features = ["derive", "env"] }
 git2 = "0.19.0"
+itertools = "0.15.0"
